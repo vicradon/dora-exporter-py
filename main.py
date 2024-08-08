@@ -3,18 +3,20 @@ import datetime
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from prometheus_client import make_wsgi_app
 from prometheus_client import Gauge, Summary, Histogram, Info, Enum, Counter
-from time import sleep, time, mktime, strptime
+from time import sleep, time, mktime, strptime, strftime
 import threading
 import random
 from dotenv import load_dotenv
 import json
 import logging
+import os
 
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
+PORT=os.getenv("PORT")
 
 app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
     '/metrics': make_wsgi_app()
@@ -30,14 +32,11 @@ def webhook():
     
     if event_type == 'push':
         handle_commit_event(request.json)
-    elif event_type == 'issues':
-        handle_issue_event(request.json)
-    elif event_type == 'pull_request':
-        handle_pull_request_event(request.json)
     elif event_type == 'status':
         handle_status_event(request.json)
     else:
         print(event_type)
+        create_json_from_payload(event_type, request.json)
         return jsonify({'message': 'Event not supported'}), 202
     
     return jsonify({'message': 'Event received'}), 200
@@ -107,10 +106,18 @@ def handle_status_event(payload):
                 lead_time_histogram.labels(repo, branch).observe(lead_time)
                 logging.info(f"Lead time for commit {commit_id} to deployment for {repo}/{branch}: {lead_time} seconds")
 
-    # json_string = json.dumps(payload, indent=4)
-    # current_timestamp = time()
-    # with open(f'status_event-{current_timestamp}', 'w') as file:
-    #     file.write(json_string)
+
+def create_json_from_payload(prefix, payload):
+    try:
+        os.makedirs("ignored")
+    except FileExistsError:
+        pass
+        
+    json_string = json.dumps(payload, indent=4)
+    current_timestamp = strftime("%H:%M")
+    with open(f'ignored/{prefix}-{current_timestamp}', 'w') as file:
+        file.write(json_string)
+
 
 def handle_commit_event(payload):
     print("COMMIT EVENT")
@@ -133,10 +140,7 @@ def handle_commit_event(payload):
     commit_times[commit_key] = commit_time
     logging.info(f"Commit {commit_id} for {repo}/{branch} recorded at {commit_time}")
 
-    json_string = json.dumps(payload, indent=4)
-    current_timestamp = time()
-    with open(f'commit_event-{current_timestamp}', 'w') as file:
-        file.write(json_string)
+    create_json_from_payload("commit_event", payload)
 
 if __name__ == '__main__':
-    app.run(port=5500, debug=True)
+    app.run(port=PORT, debug=True)
