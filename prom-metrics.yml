@@ -1,0 +1,8 @@
+groups:
+- name: dora_metrics
+  rules:
+  - record: change_failure_rate
+    expr: sum(rate(github_deployments_total{state="failure"}[5m])) / sum(rate(github_deployments_total{state=~"success|failure"}[5m]))
+  - record: mttr
+    expr: sum(rate(mttr_seconds_bucket[5m])) by (le, environment, repository, branch) / sum(rate(mttr_seconds_count[5m])) by (environment, repository, branch)
+
